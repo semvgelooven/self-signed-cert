@@ -10,7 +10,7 @@ open them, because it has never heard of your root CA.
 `simcert` fixes that.
 
 ```sh
-npx github:semvgelooven/simcert
+npx github:semvgelooven/self-signed-cert
 ```
 
 It finds your root CA, serves it to the Simulator, and walks you through trusting
@@ -34,14 +34,14 @@ just to hand over one file. That's the entire job this tool does for you.
 Run it straight from GitHub:
 
 ```sh
-npx github:semvgelooven/simcert
+npx github:semvgelooven/self-signed-cert
 ```
 
 Or clone it, if you'd rather keep it around:
 
 ```sh
-git clone https://github.com/semvgelooven/simcert.git
-cd simcert
+git clone https://github.com/semvgelooven/self-signed-cert.git
+cd self-signed-cert
 npm start
 ```
 
@@ -52,7 +52,7 @@ There are no dependencies to install.
 ### The guided route
 
 ```sh
-npm start          # or: npx github:semvgelooven/simcert
+npm start          # or: npx github:semvgelooven/self-signed-cert
 ```
 
 This detects your setup, serves the certificate at `http://127.0.0.1:8080`, boots
@@ -75,7 +75,7 @@ confirm it worked before closing anything.
 If you don't need the certificate to appear in Settings:
 
 ```sh
-npm run trust      # or: npx github:semvgelooven/simcert --trust
+npm run trust      # or: npx github:semvgelooven/self-signed-cert --trust
 ```
 
 This writes the CA straight into the Simulator's trust store with
@@ -89,7 +89,7 @@ you're testing certificate handling itself.
 ### Check what it found
 
 ```sh
-npm run info       # or: npx github:semvgelooven/simcert --info
+npm run info       # or: npx github:semvgelooven/self-signed-cert --info
 ```
 
 ```

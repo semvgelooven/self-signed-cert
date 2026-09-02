@@ -1,6 +1,6 @@
 {
   "name": "simcert",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "Trust your local dev root CA in the iOS Simulator, so Herd/Valet/lerd .test sites open over HTTPS without warnings",
   "keywords": ["ios-simulator", "https", "mkcert", "valet", "herd", "lerd", "certificate", "laravel", "local-development"],
   "license": "MIT",
@@ -12,9 +12,9 @@
     "trust": "node ./bin/simcert.mjs --trust",
     "info": "node ./bin/simcert.mjs --info"
   },
-  "repository": { "type": "git", "url": "git+https://github.com/semvgelooven/simcert.git" },
-  "bugs": { "url": "https://github.com/semvgelooven/simcert/issues" },
-  "homepage": "https://github.com/semvgelooven/simcert#readme",
+  "repository": { "type": "git", "url": "git+https://github.com/semvgelooven/self-signed-cert.git" },
+  "bugs": { "url": "https://github.com/semvgelooven/self-signed-cert/issues" },
+  "homepage": "https://github.com/semvgelooven/self-signed-cert#readme",
   "engines": { "node": ">=18" },
   "os": ["darwin"]
 }
