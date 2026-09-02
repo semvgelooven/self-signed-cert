@@ -1,0 +1,5 @@
+node_modules/
+.DS_Store
+
+# Local, machine-specific configuration. Commit the example instead.
+simcert.config.json
