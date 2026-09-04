@@ -1,6 +1,10 @@
 const escape = (value) =>
   String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
+// Values that land inside <script> need JS-string quoting, not HTML escaping.
+// Escaping < as well keeps a "</script>" in any value from closing the block.
+const js = (value) => JSON.stringify(String(value ?? '')).replace(/</g, '\\u003c');
+
 function siteRow(site) {
   const url = `https://${site.domain}`;
   return `
@@ -20,7 +24,46 @@ const SECURE_HINT = {
   mkcert: 'Add them under <code>domains</code> in <code>simcert.config.json</code>.',
 };
 
-export function installPage({ ca, info, sites, certUrl }) {
+// What the two platforms need the reader to do differs enough that only the
+// chrome around it is shared. Keeping both here means one page to restyle.
+const PLATFORMS = {
+  ios: {
+    lede: 'Install this root certificate so Safari here stops warning about your local development sites.',
+    download: 'Download certificate profile',
+    openSettings: 'Open Settings',
+    // iOS ignores the path= part of App-prefs: URLs, so the root of Settings is
+    // as close as anything can get. The profile is waiting at the top of it.
+    openSettingsHint: 'the profile is at the top',
+    heading: 'Then, in Settings',
+    steps: [
+      'Press <span class="path">s</span> in the terminal to open Settings — the downloaded profile is waiting at the top. Or go to <span class="path">Settings &rsaquo; General &rsaquo; VPN &amp; Device Management</span> yourself.',
+      'Open <span class="path">Settings &rsaquo; General &rsaquo; About &rsaquo; Certificate Trust Settings</span> and switch it on for this certificate.',
+      'Come back and check a site below.',
+    ],
+    note: 'Step 2 is the one people miss. Installing the profile alone does not make iOS trust it for HTTPS.',
+  },
+  android: {
+    lede: 'Install this root certificate so the browser here stops warning about your local development sites.',
+    download: 'Download certificate',
+    openSettings: 'Open certificate picker',
+    openSettingsHint: 'pick the file you just downloaded',
+    heading: 'Then, in Settings',
+    steps: [
+      'Press <span class="path">s</span> in the terminal to jump straight to the certificate picker — or open <span class="path">Settings &rsaquo; Security &amp; privacy &rsaquo; More security &amp; privacy &rsaquo; Encryption &amp; credentials &rsaquo; Install a certificate &rsaquo; CA certificate</span> yourself.',
+      'Pick the file you just downloaded and give it any name.',
+      'Come back and check a site below.',
+    ],
+    // The honest limit of this route: it lands in the user store, and since
+    // Android 7 apps ignore that unless they opt in.
+    note:
+      'This installs a <strong>user</strong> certificate, which the browser trusts but apps do not. ' +
+      'For your own app, either add a network security config that trusts <code>user</code> certificates, ' +
+      'or run <code>simcert --android --trust</code> to write it into the system store over adb.',
+  },
+};
+
+export function installPage({ ca, info, sites, certUrl, platform = 'ios' }) {
+  const copy = PLATFORMS[platform] ?? PLATFORMS.ios;
   const hint = SECURE_HINT[ca.id] ?? SECURE_HINT.mkcert;
   const siteList = sites.length
     ? `<ul class="sites">${sites.map(siteRow).join('')}</ul>`
@@ -70,6 +113,14 @@ export function installPage({ ca, info, sites, certUrl }) {
     background: var(--accent); color: #fff; font-weight: 600;
     padding: 15px; border-radius: 12px; margin-bottom: 18px;
   }
+  .cta-secondary {
+    width: 100%; font: inherit; font-weight: 600;
+    background: transparent; color: var(--accent);
+    border: 1px solid var(--accent); padding: 14px;
+  }
+  .cta-secondary:disabled { opacity: 0.5; }
+  .open-status { margin: -8px 0 18px; font-size: 14px; color: var(--muted); text-align: center; }
+  .open-status[data-state="bad"] { color: var(--bad); }
   ol.steps { margin: 0; padding-left: 20px; }
   ol.steps li { margin-bottom: 10px; }
   ol.steps li:last-child { margin-bottom: 0; }
@@ -91,7 +142,7 @@ export function installPage({ ca, info, sites, certUrl }) {
 <body>
 <main>
   <h1>Trust your local dev CA</h1>
-  <p class="lede">Install this root certificate so Safari here stops warning about your local development sites.</p>
+  <p class="lede">${copy.lede}</p>
 
   <div class="card">
     <h2>Certificate</h2>
@@ -103,16 +154,17 @@ export function installPage({ ca, info, sites, certUrl }) {
     </dl>
   </div>
 
-  <a class="cta" href="${escape(certUrl)}">Download certificate profile</a>
+  <a class="cta" href="${escape(certUrl)}">${copy.download}</a>
+
+  <button type="button" class="cta cta-secondary" data-open-settings>${copy.openSettings}</button>
+  <p class="open-status" data-open-status hidden></p>
 
   <div class="card">
-    <h2>Then, in Settings</h2>
+    <h2>${copy.heading}</h2>
     <ol class="steps">
-      <li>Open <span class="path">Settings &rsaquo; General &rsaquo; VPN &amp; Device Management</span> and install the downloaded profile.</li>
-      <li>Open <span class="path">Settings &rsaquo; General &rsaquo; About &rsaquo; Certificate Trust Settings</span> and switch it on for this certificate.</li>
-      <li>Come back and check a site below.</li>
+      ${copy.steps.map((step) => `<li>${step}</li>`).join('\n      ')}
     </ol>
-    <p class="note">Step 2 is the one people miss. Installing the profile alone does not make iOS trust it for HTTPS.</p>
+    <p class="note">${copy.note}</p>
   </div>
 
   <div class="card">
@@ -122,6 +174,37 @@ export function installPage({ ca, info, sites, certUrl }) {
 </main>
 
 <script>
+  // The page can't open Settings itself: iOS won't follow an App-prefs: link from
+  // web content, so instead we ask simcert to do it from the machine serving this
+  // page, over adb or simctl. The custom header is what keeps the route from
+  // being reachable by any other origin.
+  (function () {
+    var button = document.querySelector('[data-open-settings]');
+    var status = document.querySelector('[data-open-status]');
+    if (!button) return;
+
+    function say(message, state) {
+      status.textContent = message;
+      status.hidden = false;
+      if (state) status.dataset.state = state; else status.removeAttribute('data-state');
+    }
+
+    button.addEventListener('click', async function () {
+      button.disabled = true;
+      say('opening…');
+      try {
+        var response = await fetch('/open-settings', { method: 'POST', headers: { 'x-simcert': '1' } });
+        var body = await response.json().catch(function () { return {}; });
+        if (!response.ok) throw new Error(body.error || 'simcert could not open it');
+        say(${js(`Opened on this device — ${copy.openSettingsHint}.`)});
+      } catch (error) {
+        say(error.message, 'bad');
+      } finally {
+        button.disabled = false;
+      }
+    });
+  })();
+
   // An https request that survives means the TLS chain validated, so the root is
   // trusted. no-cors keeps a cross-origin response from being an error by itself.
   document.querySelectorAll('[data-check]').forEach(function (button) {

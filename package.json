@@ -1,20 +1,55 @@
 {
   "name": "simcert",
-  "version": "0.1.0",
-  "description": "Trust your local dev root CA in the iOS Simulator, so Herd/Valet/lerd .test sites open over HTTPS without warnings",
-  "keywords": ["ios-simulator", "https", "mkcert", "valet", "herd", "lerd", "certificate", "laravel", "local-development"],
+  "version": "0.2.0",
+  "description": "Trust your local dev root CA in the iOS Simulator and Android emulator, so Herd/Valet/lerd .test sites open over HTTPS without warnings",
+  "keywords": [
+    "ios-simulator",
+    "android-emulator",
+    "adb",
+    "https",
+    "mkcert",
+    "valet",
+    "herd",
+    "lerd",
+    "certificate",
+    "laravel",
+    "local-development"
+  ],
   "license": "MIT",
   "type": "module",
-  "bin": { "simcert": "./bin/simcert.mjs" },
-  "files": ["bin", "src", "simcert.config.example.json", "README.md", "LICENSE"],
+  "bin": {
+    "simcert": "./bin/simcert.mjs"
+  },
+  "files": [
+    "bin",
+    "src",
+    "simcert.config.example.json",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "start": "node ./bin/simcert.mjs",
     "trust": "node ./bin/simcert.mjs --trust",
-    "info": "node ./bin/simcert.mjs --info"
+    "info": "node ./bin/simcert.mjs --info",
+    "settings": "node ./bin/simcert.mjs --settings",
+    "ios": "node ./bin/simcert.mjs --ios",
+    "ios:trust": "node ./bin/simcert.mjs --ios --trust",
+    "android": "node ./bin/simcert.mjs --android",
+    "android:trust": "node ./bin/simcert.mjs --android --trust",
+    "both": "node ./bin/simcert.mjs --both"
   },
-  "repository": { "type": "git", "url": "git+https://github.com/semvgelooven/self-signed-cert.git" },
-  "bugs": { "url": "https://github.com/semvgelooven/self-signed-cert/issues" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/semvgelooven/self-signed-cert.git"
+  },
+  "bugs": {
+    "url": "https://github.com/semvgelooven/self-signed-cert/issues"
+  },
   "homepage": "https://github.com/semvgelooven/self-signed-cert#readme",
-  "engines": { "node": ">=18" },
-  "os": ["darwin"]
+  "engines": {
+    "node": ">=18"
+  },
+  "os": [
+    "darwin"
+  ]
 }

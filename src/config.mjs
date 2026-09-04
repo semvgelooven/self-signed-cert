@@ -27,6 +27,29 @@ const list = (value) => {
   return String(value).split(',').map((s) => s.trim()).filter(Boolean);
 };
 
+const KNOWN_TARGETS = ['ios', 'android'];
+
+// Accepts "ios", "android", "both", or a list of those, from either a config
+// file or the environment.
+export function normalizeTargets(value) {
+  const named = list(value)?.flatMap((t) => {
+    const id = t.toLowerCase();
+    return id === 'both' || id === 'all' ? KNOWN_TARGETS : [id];
+  });
+  if (!named) return undefined;
+
+  const unknown = named.find((t) => !KNOWN_TARGETS.includes(t));
+  if (unknown) throw new Error(`Unknown target "${unknown}". Known: ${KNOWN_TARGETS.join(', ')}, both`);
+  return [...new Set(named)];
+}
+
+// SIMCERT_ANDROID=1 is the older spelling of SIMCERT_TARGET=android, kept
+// working because it was documented.
+function targetList(env) {
+  return normalizeTargets(env.SIMCERT_TARGET)
+    ?? (env.SIMCERT_ANDROID && env.SIMCERT_ANDROID !== '0' ? ['android'] : undefined);
+}
+
 function fromEnv(env) {
   return {
     provider: env.SIMCERT_PROVIDER,
@@ -36,6 +59,9 @@ function fromEnv(env) {
     device: env.SIMCERT_DEVICE,
     host: env.SIMCERT_HOST,
     port: env.SIMCERT_PORT ? Number(env.SIMCERT_PORT) : undefined,
+    targets: targetList(env),
+    hostIp: env.SIMCERT_HOST_IP,
+    hosts: env.SIMCERT_HOSTS ? env.SIMCERT_HOSTS !== '0' : undefined,
   };
 }
 
@@ -54,7 +80,12 @@ export function loadConfig(flags = {}) {
 
   const merged = {
     ...DEFAULTS,
-    ...defined({ ...values, domains: list(values.domains), certificateDirs: list(values.certificateDirs) }),
+    ...defined({
+      ...values,
+      domains: list(values.domains),
+      certificateDirs: list(values.certificateDirs),
+      targets: normalizeTargets(values.targets ?? (values.android ? 'android' : undefined)),
+    }),
     ...defined(fromEnv(process.env)),
     ...defined(flags),
   };

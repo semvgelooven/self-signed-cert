@@ -82,3 +82,20 @@ export async function resolves(device, host) {
     return null;
   }
 }
+
+/**
+ * Open Settings on the device.
+ *
+ * iOS ignores everything after the scheme: `App-prefs:root=General&path=...` and
+ * a bare `App-prefs:` land on the same screen (verified on iOS 26, identical
+ * screenshots), so there is no way to drop the user straight on the profile
+ * screen. What makes this still worth doing is that once Safari has fetched the
+ * profile, Settings shows "Profile Downloaded" at the very top of that root
+ * screen — so this is one tap from installing, just not zero.
+ *
+ * The Certificate Trust Settings toggle underneath General > About cannot be
+ * reached this way at all. `simcert --trust` skips both screens instead.
+ */
+export async function openSettings(device) {
+  await run('xcrun', ['simctl', 'openurl', device.udid, 'App-prefs:']);
+}
