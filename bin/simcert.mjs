@@ -356,7 +356,7 @@ async function mapHosts(device, domains, ip) {
 
   if (!(await android.tryRoot(device))) {
     console.log(`\n! Cannot write the emulator's hosts file without adb root, so ${domains[0]} will`);
-    console.log(`  not resolve inside it.\n\n${android.ROOT_HELP}\n`);
+    console.log(`  not resolve inside it.\n\n${android.rootHelp()}\n`);
     return;
   }
 

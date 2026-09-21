@@ -170,10 +170,26 @@ the hosts file can be written. `simcert` tells you this if it hits it.
 ```sh
 sdkmanager "system-images;android-36;google_apis;arm64-v8a"
 avdmanager create avd -n Pixel_dev -k "system-images;android-36;google_apis;arm64-v8a"
-emulator -avd Pixel_dev -writable-system
+$ANDROID_HOME/emulator/emulator -avd Pixel_dev -writable-system -no-snapshot-load
 ```
 
 The `-writable-system` flag matters: without it `/system` stays read-only.
+`-no-snapshot-load` matters just as much, because resuming a quick-boot snapshot
+restores the read-only `/system` even when the flag is there.
+
+Both have to come from the `emulator` binary, which is why the path is spelled
+out above: the SDK's `emulator/` directory is not on `PATH` in a default install.
+If `$ANDROID_HOME` is unset, it is `~/Library/Android/sdk/emulator/emulator` on
+macOS. `simcert` resolves it the same way and prints the full command whenever it
+needs you to relaunch.
+
+> **Not the new `android` CLI.** Google has [deprecated the `emulator`
+> command][emu-cli] in favour of `android emulator start`, but that CLI takes
+> only `--cold` and has no `-writable-system` at all, so it cannot produce the
+> writable `/system` this needs. Android Studio's device manager cannot pass the
+> flag either. Until the new CLI grows one, launch from the `emulator` binary.
+
+[emu-cli]: https://developer.android.com/studio/run/emulator-commandline
 
 #### The reboot caveat
 
@@ -197,8 +213,14 @@ Certificate      ~/Library/Application Support/Herd/config/valet/CA/LaravelValet
 Certificate dirs ~/Library/Application Support/Herd/config/valet/Certificates
 Sites            my-app.test, my-other-app.test
 Serve on         http://127.0.0.1:8080/
-Device           (booted, else newest iPhone)
+Running          iOS Simulator, Android emulator
+Target           iOS Simulator, Android emulator
+Device           (the running one)
+Host address     10.0.2.2
+Hosts file       will map the sites above
 ```
+
+The last two lines only appear when Android is one of the targets.
 
 Start here whenever something looks wrong.
 
@@ -328,7 +350,8 @@ you. Change it with `--host-ip` if your setup differs.
 
 **Android: no emulator found.**
 `simcert` only talks to a running one. Start it first, with
-`emulator -avd <name> -writable-system`.
+`$ANDROID_HOME/emulator/emulator -avd <name> -writable-system -no-snapshot-load`
+— not `android emulator start`, which cannot pass `-writable-system`.
 
 **Starting over.**
 `xcrun simctl keychain booted reset` clears the simulator's keychain, including

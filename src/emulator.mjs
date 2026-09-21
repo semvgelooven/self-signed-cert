@@ -66,6 +66,53 @@ async function sh(device, script) {
   return stdout.trim();
 }
 
+/**
+ * Where the emulator binary lives.
+ *
+ * Unlike adbPath this prefers PATH over the SDK, because the result is printed
+ * for someone to copy rather than executed: a bare `emulator` is nicer to read
+ * when it works, and the SDK's emulator/ directory is on nobody's PATH by
+ * default, so the absolute path is what makes the hint usable.
+ */
+function emulatorPath() {
+  try {
+    execFileSync('which', ['emulator'], { stdio: 'ignore' });
+    return 'emulator';
+  } catch {
+    // Not on PATH, so name the file outright.
+  }
+
+  const candidates = [
+    process.env.EMULATOR,
+    ...[process.env.ANDROID_HOME, process.env.ANDROID_SDK_ROOT]
+      .filter(Boolean)
+      .map((sdk) => join(sdk, 'emulator/emulator')),
+    join(homedir(), 'Library/Android/sdk/emulator/emulator'),
+  ].filter(Boolean);
+
+  return candidates.find(existsSync) ?? 'emulator';
+}
+
+let cachedEmulator = null;
+const emulatorBin = () => (cachedEmulator ??= emulatorPath());
+
+/**
+ * The command that starts an AVD the way simcert needs it.
+ *
+ * Google has deprecated this binary in favour of `android emulator start`, but
+ * that CLI takes only --cold and offers no way through to -writable-system, so
+ * the old one is still the only route to a writable /system.
+ */
+export function launchCommand(avd) {
+  return `${emulatorBin()} -avd ${avd ?? '<name>'} -writable-system -no-snapshot-load`;
+}
+
+// Worth saying wherever we print the command, since the docs now steer people
+// at a CLI that cannot do this.
+export const NEW_CLI_NOTE =
+  'Not `android emulator start`: the new CLI has no -writable-system, and\n' +
+  "Android Studio's device manager cannot pass it either.";
+
 export async function listDevices() {
   const { stdout } = await adb(null, ['devices', '-l']);
   const devices = [];
@@ -99,7 +146,7 @@ export async function pickDevice(wanted) {
     const offline = devices.length > 0 ? '\nSeen but not ready: ' + devices.map((d) => `${d.serial} (${d.state})`).join(', ') : '';
     throw new Error(
       `No running Android emulator.\n\nStart one first, and start it writable:\n` +
-        `  emulator -avd <name> -writable-system${offline}`,
+        `  ${launchCommand()}\n\n${NEW_CLI_NOTE}${offline}`,
     );
   }
 
@@ -126,13 +173,15 @@ export async function apiLevel(device) {
   return Number(level) || 0;
 }
 
-export const ROOT_HELP =
+// A function rather than a constant so the emulator path is resolved when the
+// advice is actually needed, not on every import.
+export const rootHelp = () =>
   'Google Play emulator images are production builds and never allow adb root, so\n' +
   'their certificate store and hosts file cannot be written. Use a "Google APIs"\n' +
   'image instead (same Android, no Play Store):\n' +
   '  sdkmanager "system-images;android-36;google_apis;arm64-v8a"\n' +
   '  avdmanager create avd -n <name> -k "system-images;android-36;google_apis;arm64-v8a"\n' +
-  '  emulator -avd <name> -writable-system';
+  `  ${launchCommand()}`;
 
 /**
  * Restart adbd as root, reporting whether it worked rather than throwing.
@@ -150,8 +199,32 @@ export async function tryRoot(device) {
 
 export async function ensureRoot(device) {
   if (!(await tryRoot(device))) {
-    throw new Error(`This emulator will not let adb run as root.\n\n${ROOT_HELP}`);
+    throw new Error(`This emulator will not let adb run as root.\n\n${rootHelp()}`);
   }
+}
+
+const REMOUNTED = /remounted .* as RW|remount succeeded/i;
+
+// An emulator started without -writable-system keeps dm-verity on for the whole
+// boot, and adb says so rather than failing vaguely. No reboot can clear it.
+const VERITY_LOCKED = /bootloader unlocked|verity is enabled/i;
+
+/**
+ * What to tell someone whose /system cannot be made writable.
+ *
+ * Android Studio's device manager has no toggle for -writable-system, so an
+ * emulator started from the UI always lands here; the only way out is a
+ * relaunch from the terminal.
+ */
+function relaunchHelp(device) {
+  return (
+    'Start it from the terminal instead:\n' +
+    '  adb emu kill\n' +
+    `  ${launchCommand(device?.avd)}\n\n` +
+    `${NEW_CLI_NOTE}\n` +
+    'Resuming a snapshot restores the read-only /system even when the flag is\n' +
+    'passed, which is what -no-snapshot-load is for.'
+  );
 }
 
 /**
@@ -162,7 +235,13 @@ export async function ensureRoot(device) {
  */
 export async function remountSystem(device) {
   const first = await adb(device, ['remount']).catch((e) => ({ stdout: '', stderr: e.message }));
-  if (/remounted .* as RW|remount succeeded/i.test(`${first.stdout}${first.stderr}`)) return;
+  const firstOut = `${first.stdout}${first.stderr}`;
+  if (REMOUNTED.test(firstOut)) return;
+
+  // Verity is locked on for this boot, so skip the reboot that cannot help it.
+  if (VERITY_LOCKED.test(firstOut)) {
+    throw new Error(`/system is read-only on this emulator.\n\n${relaunchHelp(device)}`);
+  }
 
   await adb(device, ['reboot']);
   await adb(device, ['wait-for-device']);
@@ -170,11 +249,8 @@ export async function remountSystem(device) {
   await ensureRoot(device);
 
   const second = await adb(device, ['remount']).catch((e) => ({ stdout: '', stderr: e.message }));
-  if (!/remounted .* as RW|remount succeeded/i.test(`${second.stdout}${second.stderr}`)) {
-    throw new Error(
-      'Could not remount /system as writable. Start the emulator with -writable-system:\n' +
-        '  emulator -avd <name> -writable-system',
-    );
+  if (!REMOUNTED.test(`${second.stdout}${second.stderr}`)) {
+    throw new Error(`Could not remount /system as writable.\n\n${relaunchHelp(device)}`);
   }
 }
 

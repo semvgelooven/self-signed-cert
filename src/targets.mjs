@@ -55,7 +55,7 @@ export async function resolveTargets({ requested, interactive = process.stdin.is
   if (available.length === 0) {
     throw new Error(
       'Nothing to install into. Boot an iOS Simulator, or start an Android emulator\n' +
-        'with: emulator -avd <name> -writable-system',
+        `with:\n  ${android.launchCommand()}\n\n${android.NEW_CLI_NOTE}`,
     );
   }
 
