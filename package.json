@@ -1,6 +1,6 @@
 {
   "name": "simcert",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Trust your local dev root CA in the iOS Simulator and Android emulator, so Herd/Valet/lerd .test sites open over HTTPS without warnings",
   "keywords": [
     "ios-simulator",
