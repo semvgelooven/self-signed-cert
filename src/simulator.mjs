@@ -52,13 +52,30 @@ export function pickDevice(wanted) {
   return pool.sort((a, b) => b.version - a.version)[0];
 }
 
+// Xcode 27 replaced Simulator.app with DeviceHub.app, so try the old bundle
+// first and fall back to the new one. Bundle IDs avoid matching other apps
+// that happen to be named "Simulator".
+const SIMULATOR_APPS = ['com.apple.iphonesimulator', 'com.apple.dt.Devices'];
+
+async function showSimulator() {
+  for (const bundleId of SIMULATOR_APPS) {
+    try {
+      await run('open', ['-b', bundleId]);
+      return;
+    } catch {
+      // Not installed with this Xcode; try the next one.
+    }
+  }
+  throw new Error('Could not open Simulator or DeviceHub. Check that Xcode is installed and selected with xcode-select.');
+}
+
 export async function ensureBooted(device) {
   if (device.state === 'Booted') {
-    await run('open', ['-a', 'Simulator']);
+    await showSimulator();
     return device;
   }
   await run('xcrun', ['simctl', 'boot', device.udid]);
-  await run('open', ['-a', 'Simulator']);
+  await showSimulator();
   await run('xcrun', ['simctl', 'bootstatus', device.udid, '-b']);
   return { ...device, state: 'Booted' };
 }
