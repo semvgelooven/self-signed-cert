@@ -373,7 +373,13 @@ async function reportAndroidDns(device, domains) {
   const [domain] = domains ?? [];
   if (!domain) return;
 
-  const address = await android.resolves(device, domain);
+  // Android's resolver picks up a rewritten hosts file a moment later, so a
+  // miss straight after writing it gets one more look before it is reported.
+  let address = await android.resolves(device, domain);
+  if (address === false) {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    address = await android.resolves(device, domain);
+  }
   if (address === null) return;
   if (address === false) {
     console.log(`\n! ${domain} does not resolve in the emulator. Re-run without --no-hosts.`);
