@@ -80,8 +80,25 @@ export async function ensureBooted(device) {
   return { ...device, state: 'Booted' };
 }
 
-export async function openUrl(device, url) {
-  await run('xcrun', ['simctl', 'openurl', device.udid, url]);
+/**
+ * Open a URL in the simulator.
+ *
+ * Straight after a cold boot, `bootstatus -b` reports the device ready while
+ * SpringBoard still cannot hand a URL to Safari, and openurl fails with "Operation
+ * timed out" (NSPOSIXErrorDomain 60). It succeeds a few seconds later, so a
+ * timeout is retried; any other failure is real and surfaces at once.
+ */
+export async function openUrl(device, url, attempts = 5) {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      await run('xcrun', ['simctl', 'openurl', device.udid, url]);
+      return;
+    } catch (error) {
+      const timedOut = /code=60|timed out/i.test(`${error.stderr ?? ''}${error.message ?? ''}`);
+      if (!timedOut || attempt >= attempts) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+    }
+  }
 }
 
 export async function addRootCert(device, certPath) {
